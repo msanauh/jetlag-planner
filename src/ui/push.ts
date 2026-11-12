@@ -34,7 +34,8 @@ export async function enablePush(tripId: string, alerts: Alert[]): Promise<strin
   if (perm !== 'granted') return 'Sin permiso no puedo enviarte avisos. Puedes activarlo en Ajustes → Notificaciones.';
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID!) }));
-  await syncAlerts(tripId, alerts, sub);
+  try { await syncAlerts(tripId, alerts, sub); }
+  catch (e) { return `Permiso concedido, pero el servidor no pudo guardar los avisos: ${(e as Error).message}`; }
   return 'Avisos activados.';
 }
 
@@ -43,7 +44,8 @@ export async function syncAlerts(tripId: string, alerts: Alert[], sub?: PushSubs
   if (!pushConfigured() || !pushSupported() || permission() !== 'granted') return;
   sub ??= await (await navigator.serviceWorker.ready).pushManager.getSubscription();
   if (!sub) return;
-  await post('/subscribe', { subscription: sub.toJSON(), trip: tripId, alerts: alerts.map(a => ({ id: a.id, at: a.at, title: a.title, body: a.body })) });
+  const r = await post('/subscribe', { subscription: sub.toJSON(), trip: tripId, alerts: alerts.map(a => ({ id: a.id, at: a.at, title: a.title, body: a.body })) });
+  if (!r.ok) throw new Error(await r.json().then((j: { error?: string }) => j.error ?? '').catch(() => '') || `Error ${r.status}`);
 }
 
 async function currentSub(): Promise<PushSubscription | null> {
@@ -57,7 +59,9 @@ export async function sendTest(): Promise<string> {
   const sub = await currentSub();
   if (!sub || !pushConfigured()) return 'Primero activa los avisos.';
   const r = await post('/test', { subscription: sub.toJSON() });
-  return r.ok ? 'Aviso de prueba enviado. Debería llegarte en unos segundos.' : 'No se pudo enviar el aviso de prueba.';
+  if (r.ok) return 'Aviso de prueba enviado. Debería llegarte en unos segundos.';
+  const msg = await r.json().then((j: { error?: string }) => j.error).catch(() => '');
+  return 'No se pudo enviar el aviso de prueba' + (msg ? `: ${msg}` : '.');
 }
 
 /** Desactiva los avisos en este dispositivo y borra los datos del servidor. */

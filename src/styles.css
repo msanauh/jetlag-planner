@@ -90,7 +90,17 @@ h1{font:800 clamp(30px,8vw,40px)/1.08 var(--display);letter-spacing:-.02em;margi
 .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 .pair>*,.pair .in{min-width:0}
 label.f{display:flex;flex-direction:column;gap:8px;font-size:15px;font-weight:600;color:var(--muted)}
-.in{font:500 20px var(--body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0 16px;min-height:58px;width:100%}
+.in{font:500 20px var(--body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0 16px;height:58px;width:100%;min-width:0;max-width:100%}
+/* iOS: fecha, hora y desplegables sin estilo nativo (si no, se salen del ancho y se centran) */
+input.in[type="date"],input.in[type="time"],select.in{-webkit-appearance:none;appearance:none;display:block;text-align:left;line-height:normal}
+.in::-webkit-date-and-time-value{text-align:left;margin:0}
+.in::-webkit-calendar-picker-indicator{opacity:.6}
+select.in{padding-right:44px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23878A7E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 16px center}
+/* Campos de fecha u hora sueltos: ancho natural, no de lado a lado */
+.fields>label.f>input[type="date"],.fields>label.f>input[type="time"]{max-width:240px}
+/* Filas "Desayuno ........ 08:00" */
+label.f.inline{flex-direction:row;align-items:center;justify-content:space-between;gap:16px;color:var(--ink);font-size:18px;font-weight:600;padding:0 2px}
+label.f.inline .in{width:132px;flex:none}
 .hintbox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;color:var(--muted);font-size:16px}
 .hintbox b{color:var(--ink);font-weight:600}
 .warn{display:flex;gap:12px;align-items:flex-start;background:var(--vanilla);color:var(--vanilla-ink);border-radius:14px;padding:14px 16px;font-size:16px;text-align:left}
@@ -121,7 +131,8 @@ details.adv .fields{margin-top:16px}
 .legcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:16px}
 .legcard header{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .legcard h2{font:800 18px var(--display);margin:0}
-.legcard .in{font-size:17px;min-height:52px;padding:0 12px}
+.legcard .in{font-size:17px;height:52px;padding:0 12px}
+.legcard select.in{padding-right:36px;background-position:right 12px center}
 .stayline{font-size:15px;color:var(--muted);padding:0 4px}
 .stayline b{color:var(--ink)}
 .addrow{display:flex;flex-wrap:wrap;gap:10px}
@@ -185,7 +196,7 @@ details.adv .fields{margin-top:16px}
 .doneform{margin-top:16px;display:flex;flex-direction:column;gap:12px}
 .doneform .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 .doneform label.f{flex:1;min-width:140px}
-.doneform .in{min-height:48px;font-size:18px}
+.doneform .in{height:48px;font-size:18px;max-width:160px}
 .donechip{display:inline-flex;align-items:center;gap:6px;color:var(--ok);font-weight:600;font-size:15px}
 .donechip .ic{width:18px;height:18px}
 
