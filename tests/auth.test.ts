@@ -32,3 +32,16 @@ describe('quién puede llamar a /api/tick', () => {
     expect(await authorizedTick(req({ 'upstash-signature': 'x' }), '', {})).toBe(false);
   });
 });
+
+describe('claves de firma a partir de QSTASH_TOKEN', () => {
+  it('si no están en el entorno, se piden a QStash con el token', async () => {
+    let asked = '';
+    const fake = (async (url: string, init?: RequestInit) => {
+      asked = `${url} ${(init?.headers as Record<string, string>).authorization}`;
+      return new Response(JSON.stringify({ current: 'sig_actual', next: 'sig_siguiente' }));
+    }) as typeof fetch;
+    const ok = await authorizedTick(req({ 'upstash-signature': qstashSignature('sig_actual', '') }), '', { QSTASH_TOKEN: 'tok' }, fake);
+    expect(ok).toBe(true);
+    expect(asked).toBe('https://qstash.upstash.io/v2/keys Bearer tok');
+  });
+});
