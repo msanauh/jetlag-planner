@@ -27,7 +27,7 @@ npm run icons      # regenera los iconos de public/icons
 El navegador no puede programar avisos por sí solo, así que `api/` es un pequeño servidor en Vercel:
 
 - `POST /api/subscribe` guarda la suscripción y los avisos de un viaje `{ subscription, trip, alerts: [{ id, at, title, body }] }` en Upstash Redis. Solo eso: ni ciudades ni horarios de sueño. `DELETE` lo borra todo.
-- `POST /api/tick` envía los avisos que tocan (con `Authorization: Bearer $CRON_SECRET`). Descarta los que llegarían más de 15 min tarde y olvida las suscripciones caducadas.
+- `POST /api/tick` envía los avisos que tocan. Solo acepta llamadas firmadas por QStash o con `Authorization: Bearer $CRON_SECRET`. Descarta los que llegarían más de 15 min tarde y olvida las suscripciones caducadas.
 - `POST /api/test` manda un aviso de prueba.
 
 La lógica está en `api/_lib/logic.ts` y se prueba en `tests/server.test.ts` sin Redis.
@@ -37,7 +37,7 @@ La lógica está en `api/_lib/logic.ts` y se prueba en `tests/server.test.ts` si
 1. Importa el repositorio en Vercel (detecta Vite; `vercel.json` ya indica la compilación).
 2. **Storage → Marketplace → Upstash Redis**, conectado al proyecto. Crea `KV_REST_API_URL` y `KV_REST_API_TOKEN`.
 3. Genera las claves con `npx web-push generate-vapid-keys` y añade en **Settings → Environment Variables** las de `.env.example`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` con tu correo), `VITE_VAPID_PUBLIC_KEY` (la misma pública) y `CRON_SECRET` (cualquier texto largo aleatorio). Vuelve a desplegar.
-4. Planificación cada 2 minutos. El Cron de Vercel en el plan gratuito solo permite una ejecución al día, así que se usa **QStash** (Upstash): con el token de QStash, `QSTASH_TOKEN=… CRON_SECRET=… node scripts/qstash-schedule.mjs https://tu-app.vercel.app`. Son unas 720 llamadas al día; comprueba que entran en tu plan de QStash. Con Vercel Pro puedes usar su Cron en su lugar.
+4. Planificación cada 2 minutos con **QStash** (Upstash), porque el Cron de Vercel en el plan gratuito solo se ejecuta una vez al día. En la consola de Upstash → QStash → tu región: copia las **Signing Keys** a Vercel como `QSTASH_CURRENT_SIGNING_KEY` y `QSTASH_NEXT_SIGNING_KEY` y vuelve a desplegar. Después, en **Schedules → Create Schedule**: URL `https://tu-app.vercel.app/api/tick` y cabecera `Upstash-Cron` = `*/2 * * * *`. QStash firma cada llamada y `/api/tick` comprueba la firma. (Alternativa: `scripts/qstash-schedule.mjs`, que usa `CRON_SECRET`; o Vercel Cron en el plan Pro.)
 5. En el iPhone (iOS 16.4 o superior): abre la web en Safari → Compartir → Añadir a pantalla de inicio → abre la app → Hoy → Avisos en el móvil → Activar avisos → Enviar aviso de prueba.
 
 Es un modelo simplificado, no consejo médico.
