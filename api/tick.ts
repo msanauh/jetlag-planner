@@ -1,18 +1,21 @@
 /* Envía los avisos que tocan. Lo llama una planificación de QStash cada 2 minutos
    (firmada con las Signing Keys) o Vercel Cron con "Authorization: Bearer $CRON_SECRET". */
-import { authorizedTick } from './_lib/auth.js';
+import { checkTick } from './_lib/auth.js';
 import { tick } from './_lib/logic.js';
 import { json, webPushSender } from './_lib/push.js';
 import { redisStore } from './_lib/store.js';
 
 async function handle(req: Request): Promise<Response> {
   const body = req.method === 'POST' ? await req.text() : '';
-  if (!(await authorizedTick(req, body))) {
-    // Diagnóstico sin valores: solo qué está configurado (sí / no).
+  const auth = await checkTick(req, body);
+  if (!auth.ok) {
+    // Diagnóstico sin secretos: qué está configurado, por qué no vale la firma y los 4 últimos
+    // caracteres de cada clave (para ver si son las de la misma cuenta).
     const e = process.env, has = (k: string) => !!e[k]?.trim();
     return json({
       error: 'No autorizado.',
-      firma: req.headers.has('upstash-signature'),
+      motivo: auth.reasons,
+      ...auth.diag,
       config: {
         QSTASH_CURRENT_SIGNING_KEY: has('QSTASH_CURRENT_SIGNING_KEY'), QSTASH_NEXT_SIGNING_KEY: has('QSTASH_NEXT_SIGNING_KEY'),
         QSTASH_TOKEN: has('QSTASH_TOKEN'), CRON_SECRET: has('CRON_SECRET'),
@@ -20,7 +23,8 @@ async function handle(req: Request): Promise<Response> {
       },
     }, 401);
   }
-  return json(await tick(redisStore(), webPushSender()));
+  const every = Number(process.env.TICK_EVERY_MIN) || undefined; // por defecto, 10 minutos
+  return json(await tick(redisStore(), webPushSender(), Date.now(), every));
 }
 export const GET = handle;
 export const POST = handle;

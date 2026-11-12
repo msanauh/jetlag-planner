@@ -27,7 +27,7 @@ describe('servidor de avisos', () => {
     await expect(subscribe(st, { subscription: sub, trip: '../x', alerts: [] })).rejects.toThrow();
     await expect(subscribe(st, { subscription: sub, trip: 't', alerts: [{ id: 1 }] })).rejects.toThrow();
   });
-  it('envía lo que toca (y lo del próximo minuto), y no repite', async () => {
+  it('envía lo que toca (y lo de los próximos 5 min, con la planificación cada 10), y no repite', async () => {
     const st = memoryStore();
     await subscribe(st, { subscription: sub, trip: 't1', alerts }, NOW);
     const sent: string[] = [];
@@ -59,5 +59,27 @@ describe('servidor de avisos', () => {
     await subscribe(st, { subscription: sub, trip: 't1', alerts }, NOW);
     await unsubscribe(st, { endpoint: sub.endpoint });
     expect(st.all()).toHaveLength(0);
+  });
+});
+
+describe('ritmo de la planificación', () => {
+  it('cada 10 min: manda lo que toca en los próximos 5 min, no lo de dentro de 6', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 't', alerts: [
+      { id: 'b1', at: NOW + 4 * M, title: 'pronto', body: '' },
+      { id: 'b2', at: NOW + 6 * M, title: 'luego', body: '' },
+    ] }, NOW);
+    const sent: string[] = [];
+    await tick(st, async (_s, p) => { sent.push(p.id); }, NOW);
+    expect(sent).toEqual(['b1']);
+    await tick(st, async (_s, p) => { sent.push(p.id); }, NOW + 10 * M);
+    expect(sent).toEqual(['b1', 'b2']);
+  });
+  it('cada minuto (si algún día se cambia): solo 30 s de margen', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 't', alerts: [{ id: 'c1', at: NOW + 2 * M, title: 'x', body: '' }] }, NOW);
+    const sent: string[] = [];
+    await tick(st, async (_s, p) => { sent.push(p.id); }, NOW, 1);
+    expect(sent).toEqual([]);
   });
 });

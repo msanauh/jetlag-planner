@@ -29,8 +29,10 @@ export const subIdOf = (endpoint: string) => createHash('sha256').update(endpoin
 const MAX_ALERTS = 600, MAX_TEXT = 200, DAY = 86_400_000;
 /** Un aviso que llega con más de este retraso ya no tiene sentido ("en 30 minutos…"). */
 export const STALE_MS = 15 * 60_000;
-/** Se envían también los que tocan en el próximo minuto (la planificación pasa cada 2). */
-export const EARLY_MS = 60_000;
+/** Cada cuántos minutos pasa la planificación (QStash: cada 10). Se envía lo que toca en la
+    mitad de ese intervalo, para que cada aviso llegue como mucho ±intervalo/2 de su hora. */
+export const DEFAULT_EVERY_MIN = 10;
+export const earlyMs = (everyMin = DEFAULT_EVERY_MIN) => Math.max(1, everyMin) * 60_000 / 2;
 
 export function parseSub(x: unknown): PushSub {
   const s = x as PushSub;
@@ -64,8 +66,8 @@ export async function unsubscribe(store: Store, body: unknown): Promise<void> {
 }
 
 /** Envía los avisos que tocan. Devuelve un resumen para los registros. */
-export async function tick(store: Store, send: Sender, now = Date.now()): Promise<{ sent: number; stale: number; gone: number; failed: number }> {
-  const list = await store.due(now + EARLY_MS, 300);
+export async function tick(store: Store, send: Sender, now = Date.now(), everyMin = DEFAULT_EVERY_MIN): Promise<{ sent: number; stale: number; gone: number; failed: number }> {
+  const list = await store.due(now + earlyMs(everyMin), 300);
   const r = { sent: 0, stale: 0, gone: 0, failed: 0 };
   const done: Due[] = [];
   const gone = new Set<string>();

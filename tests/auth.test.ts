@@ -45,3 +45,21 @@ describe('claves de firma a partir de QSTASH_TOKEN', () => {
     expect(asked).toBe('https://qstash.upstash.io/v2/keys Bearer tok');
   });
 });
+
+describe('si las claves de Vercel no sirven, prueba las del token', () => {
+  it('acepta la firma con las claves del token aunque las del entorno sean de otra cuenta', async () => {
+    const fake = (async () => new Response(JSON.stringify({ current: 'sig_buena', next: 'sig_buena2' }))) as unknown as typeof fetch;
+    const { checkTick } = await import('../api/_lib/auth');
+    const r = await checkTick(req({ 'upstash-signature': qstashSignature('sig_buena', '') }), '', { QSTASH_CURRENT_SIGNING_KEY: 'sig_mala', QSTASH_NEXT_SIGNING_KEY: 'sig_mala2', QSTASH_TOKEN: 't2' }, fake);
+    expect(r.ok).toBe(true);
+    expect(r.via).toBe('token');
+  });
+  it('si ninguna sirve, explica por qué sin mostrar las claves', async () => {
+    const { checkTick } = await import('../api/_lib/auth');
+    const r = await checkTick(req({ 'upstash-signature': qstashSignature('otra_cuenta', '') }), '', { QSTASH_CURRENT_SIGNING_KEY: 'sig_mala_abcd', QSTASH_NEXT_SIGNING_KEY: 'sig_mala_efgh' }, (async () => new Response('', { status: 401 })) as unknown as typeof fetch);
+    expect(r.ok).toBe(false);
+    expect(r.reasons[0]).toMatch(/claves de Vercel/);
+    expect(JSON.stringify(r.diag)).not.toContain('sig_mala');
+    expect(r.diag.clavesVercel).toEqual({ current: '…abcd', next: '…efgh' });
+  });
+});
