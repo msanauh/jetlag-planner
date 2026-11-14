@@ -47,11 +47,25 @@ export function redisStore(): Store {
       for (const t of await r.smembers(`jl:trips:${s}`)) await dropTrip(s, t);
       await r.del(`jl:trips:${s}`, `jl:sub:${s}`);
     },
+    async pending(s) {
+      let count = 0, next: number | null = null;
+      for (const t of await r.smembers(`jl:trips:${s}`)) {
+        for (const m of await r.smembers(idx(s, t))) {
+          const d = JSON.parse(m) as Due; count++;
+          if (next == null || d.at < next) next = d.at;
+        }
+      }
+      return { count, next };
+    },
+    async total() { return r.zcard('jl:due'); },
+    async setMeta(k, v) { await r.set(`jl:meta:${k}`, JSON.stringify(v), { ex: 30 * 86_400 }); },
+    async getMeta(k) { const v = await r.get<string>(`jl:meta:${k}`); return v ? JSON.parse(v) : null; },
   };
 }
 
 export function memoryStore(): Store & { all(): Due[] } {
   const subs = new Map<string, PushSub>();
+  const meta = new Map<string, unknown>();
   let due: Due[] = [];
   return {
     all: () => due,
@@ -61,5 +75,9 @@ export function memoryStore(): Store & { all(): Due[] } {
     async due(until, limit) { return due.filter(d => d.at <= until).sort((a, b) => a.at - b.at).slice(0, limit); },
     async remove(items) { const k = new Set(items.map(enc)); due = due.filter(d => !k.has(enc(d))); },
     async forget(s) { subs.delete(s); due = due.filter(d => d.s !== s); },
+    async pending(s) { const mine = due.filter(d => d.s === s); return { count: mine.length, next: mine.length ? Math.min(...mine.map(d => d.at)) : null }; },
+    async total() { return due.length; },
+    async setMeta(k, v) { meta.set(k, v); },
+    async getMeta(k) { return meta.get(k) ?? null; },
   };
 }

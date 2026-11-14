@@ -18,6 +18,13 @@ export interface Store {
   remove(items: Due[]): Promise<void>;
   /** Borra la suscripción y todos sus avisos. */
   forget(subId: string): Promise<void>;
+  /** Avisos pendientes de una suscripción: cuántos y el próximo instante. */
+  pending(subId: string): Promise<{ count: number; next: number | null }>;
+  /** Total de avisos pendientes (todas las suscripciones). */
+  total(): Promise<number>;
+  /** Pequeño registro de estado (última pasada, último rechazo). Sin datos personales. */
+  setMeta(key: string, value: unknown): Promise<void>;
+  getMeta(key: string): Promise<unknown>;
 }
 
 export type Sender = (sub: PushSub, payload: { id: string; title: string; body: string }) => Promise<void>;

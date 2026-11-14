@@ -83,3 +83,14 @@ describe('ritmo de la planificación', () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe('estado', () => {
+  it('cuenta los avisos pendientes de una suscripción y el próximo', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 't1', alerts }, NOW);
+    expect(await st.pending(subIdOf(sub.endpoint))).toEqual({ count: 3, next: NOW - 5 * M });
+    expect(await st.total()).toBe(3);
+    await st.setMeta('lastTick', { at: 1 });
+    expect(await st.getMeta('lastTick')).toEqual({ at: 1 });
+  });
+});
