@@ -26,15 +26,15 @@ function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** Debe llamarse desde un toque del usuario (requisito de iOS). */
-export async function enablePush(tripId: string, alerts: Alert[]): Promise<string> {
+/** Debe llamarse desde un toque del usuario (requisito de iOS). Envía los avisos de todos los viajes. */
+export async function enablePush(items: { tripId: string; alerts: Alert[] }[]): Promise<string> {
   if (!pushSupported()) return isIOS() && !isStandalone() ? 'Primero instala la app: Compartir → Añadir a pantalla de inicio, y ábrela desde ahí.' : 'Este navegador no admite avisos push.';
-  if (!pushConfigured()) return 'Falta el servidor de avisos. Está pendiente de elegir dónde alojarlo.';
+  if (!pushConfigured()) return 'Falta configurar el servidor de avisos.';
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') return 'Sin permiso no puedo enviarte avisos. Puedes activarlo en Ajustes → Notificaciones.';
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID!) }));
-  try { await syncAlerts(tripId, alerts, sub); }
+  try { for (const it of items) await syncAlerts(it.tripId, it.alerts, sub); }
   catch (e) { return `Permiso concedido, pero el servidor no pudo guardar los avisos: ${(e as Error).message}`; }
   return 'Avisos activados.';
 }
@@ -74,3 +74,12 @@ export async function disablePush(): Promise<string> {
 }
 
 export async function isSubscribed(): Promise<boolean> { return !!(await currentSub().catch(() => null)); }
+
+export interface ServerStatus { mine?: { count: number; next: number | null }; lastTick?: { at: number } | null; lastRejected?: { at: number; motivo?: string[] } | null }
+/** Estado del servidor para este móvil: avisos programados y última comprobación. */
+export async function serverStatus(): Promise<ServerStatus | null> {
+  const sub = await currentSub().catch(() => null);
+  if (!sub || !pushConfigured()) return null;
+  const r = await post('/status', { endpoint: sub.endpoint }).catch(() => null);
+  return r && r.ok ? (r.json() as Promise<ServerStatus>) : null;
+}

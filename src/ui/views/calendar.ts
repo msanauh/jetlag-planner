@@ -3,14 +3,14 @@ import type { SunTimes } from '../../core/sun';
 import { H, localToUtc, ymdInTz } from '../../core/time';
 import { cap, DL, DN, DS, esc, fmtH, T, WD } from '../format';
 import { icon, PILL } from '../icons';
-import { CAT, cityAt, describe, signedTxt, statusClass, statusOf, sunAt, titleOf, tzFor, type Built, type CitySnap } from '../model';
+import { CAT, cityAt, describe, statusClass, statusOf, sunAt, titleOf, tzFor, type Built, type CitySnap } from '../model';
 import { app, curTrip, persist, S } from '../state';
 import { tabs, onTab } from './tabs';
 import { doneControls, doneUi, handleDone, handleDoneSubmit } from './done';
 
 const HOUR = 44;
 export const cal = {
-  view: 3, idx: null as number | null, sel: null as number | null, scroll: null as number | null, panel: false, kbd: false,
+  view: 1, idx: null as number | null, sel: null as number | null, scroll: null as number | null, panel: false, kbd: false,
   filters: { sleep: 1, meal: 1, light: 1, caffeine: 1, sugar: 1, melatonin: 1 } as Record<string, number>,
 };
 export function calReset(): void { cal.idx = null; cal.sel = null; cal.scroll = null; doneUi.editing = null; }
@@ -99,7 +99,7 @@ export function viewCalendar(): void {
   const vis = cols.slice(cal.idx, cal.idx + N);
   const old = app().querySelector('.cal-scroll');
   const prevScroll = old ? old.scrollTop : cal.scroll;
-  const rangeTxt = vis.length === 1 ? cap(DL(vis[0].tz).format(vis[0].mid + 12 * H)) : DS(vis[0].tz).format(vis[0].mid + 12 * H) + ' – ' + DS(vis[vis.length - 1].tz).format((vis[vis.length - 1].last ?? vis[vis.length - 1].mid) + 12 * H);
+  const rangeTxt = vis.length === 1 ? cap(WD(vis[0].tz).format(vis[0].mid + 12 * H).replace('.', '')) + ' ' + DS(vis[0].tz).format(vis[0].mid + 12 * H) : DS(vis[0].tz).format(vis[0].mid + 12 * H) + ' – ' + DS(vis[vis.length - 1].tz).format((vis[vis.length - 1].last ?? vis[vis.length - 1].mid) + 12 * H);
   const axisW = innerWidth < 520 ? 38 : 48;
   const colW = ((app().clientWidth || innerWidth) - axisW) / N;
   const pillW = Math.min((colW - 24) / 3 - 4, 52);
@@ -170,8 +170,6 @@ export function viewCalendar(): void {
   const filtDefs: [string, string, string][] = [['sleep', 'Sueño', 'var(--p-sleep)'], ['meal', 'Comidas', 'var(--meal)'], ['light', 'Luz', 'var(--p-light)'], ['caffeine', 'Cafeína', 'var(--p-coffee)'], ['sugar', 'Azúcar', 'var(--o-sugar)']];
   if (trip.raw.melatonin) filtDefs.push(['melatonin', 'Melatonina', 'var(--mel)']);
   const filt = filtDefs.map(f => `<button class="fchip" data-filter="${f[0]}" aria-pressed="${cal.filters[f[0]] ? 'true' : 'false'}"><i style="background:${f[2]}"></i>${f[1]}</button>`).join('');
-  const sum = '<div class="sumline">' + p.transitions.filter(t => t.total > 0).map(t =>
-    `<b>${t.dir === 'adv' ? 'Adelantar' : 'Retrasar'} ${fmtH(t.total)} h</b> hacia ${esc(b.legTo[t.legTo].n)} (${signedTxt(t.signed)}) · ${fmtH(t.rate)} h/día` + (t.adaptedAt ? ` · adaptada el <b>${esc(DS(t.toTz).format(t.adaptedAt))}</b>` : '')).join('<br>') + '</div>';
 
   let sheet = '';
   if (cal.sel != null && hit[cal.sel]) {
@@ -189,7 +187,7 @@ export function viewCalendar(): void {
 
   app().innerHTML = `<div class="cal"><div class="bar"><div class="r1"><div class="ttl"><b>${esc(b.title)}</b></div><div class="seg" role="group" aria-label="Vista">${([[1, 'Día'], [3, '3 días'], [5, '5 días']] as [number, string][]).filter(v => wide || v[0] !== 5).map(v => `<button data-view="${v[0]}" aria-pressed="${cal.view === v[0]}">${v[1]}</button>`).join('')}</div></div>
     <div class="r2"><button class="ib" data-act="prev" aria-label="Anterior"${cal.idx === 0 ? ' disabled' : ''}>‹</button><div class="range" aria-live="polite">${esc(rangeTxt)}</div><button class="ib" data-act="next" aria-label="Siguiente"${cal.idx + N >= cols.length ? ' disabled' : ''}>›</button><button class="ib sm" data-act="today">Hoy</button><button class="ib sm" data-act="flight">Vuelo</button><button class="ib sm" data-act="panel" aria-expanded="${cal.panel}">Filtros</button></div></div>
-    ${cal.panel ? `<div class="panel">${filt}${tzSel}</div>` : ''}${sum}
+    ${cal.panel ? `<div class="panel">${filt}${tzSel}</div>` : ''}
     <div class="cal-scroll"><div class="cal-head"><div class="gap" style="width:${axisW}px"></div>${heads}</div><div class="cal-body">${axis}${colsHTML}</div></div>${sheet}${tabs('calendario')}</div>`;
 
   const sc = app().querySelector<HTMLElement>('.cal-scroll')!;

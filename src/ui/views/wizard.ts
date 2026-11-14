@@ -197,7 +197,7 @@ function next(): void {
         S.trips = [t, ...S.trips].slice(0, 30); persist.trips();
         S.profile = { home: f.home, bed: f.bed, wake: f.wake, mb: f.mb, ml: f.ml, md: f.md }; persist.profile();
         S.current = t.id; persist.current(); calReset();
-        wiz = null; go('hoy'); return;
+        wiz = null; go('calendario'); return;
       }
     }
   }

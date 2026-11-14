@@ -1,9 +1,9 @@
 import './styles.css';
 import { loadCities } from './cities';
-import { alertsFor } from './core/alerts';
-import { isDayAt } from './ui/model';
+import { isSubscribed, registerSW } from './ui/push';
 import { app, curTrip, hooks, loadState, S } from './ui/state';
-import { registerSW, syncAlerts } from './ui/push';
+import { syncAll, syncTrip } from './ui/sync';
+import { viewNoTrip } from './ui/views/tabs';
 import { viewCalendar } from './ui/views/calendar';
 import { viewList } from './ui/views/list';
 import { viewToday } from './ui/views/today';
@@ -18,23 +18,22 @@ function route(): void {
   el.onclick = el.oninput = el.onchange = el.onkeydown = el.onsubmit = null;
   const prev = el.dataset.rendered;
   delete el.dataset.rendered;
-  const has = !!curTrip();
-  const view = h === 'nuevo' ? 'nuevo' : has && ['hoy', 'calendario', 'lista'].includes(h) ? h : 'viajes';
+  // Sin pestaña en la URL: Hoy si hay viajes; si no, Viajes.
+  const view = h === 'nuevo' ? 'nuevo' : ['hoy', 'calendario', 'lista', 'viajes'].includes(h) ? h : S.trips.length ? 'hoy' : 'viajes';
   // Al refrescar la misma pantalla se conserva el scroll.
   if (prev === view) el.dataset.rendered = prev;
   if (view !== 'nuevo') el.dataset.view = view;
   if (view !== lastView) document.getElementById('citylist')!.innerHTML = '';
   lastView = view;
+  // Calendario y Lista necesitan un viaje; sin ninguno, estado vacío (la barra de pestañas sigue).
+  if ((view === 'calendario' || view === 'lista') && !curTrip()) return viewNoTrip(view);
   ({ nuevo: viewWizard, hoy: viewToday, calendario: viewCalendar, lista: viewList, viajes: viewTrips } as Record<string, () => void>)[view]();
 }
 
 async function boot(): Promise<void> {
   await loadState();
   // Marcar algo recalcula el plan: se reenvían los avisos al servidor (si están activados).
-  hooks.afterDone = () => {
-    const c = curTrip(); if (!c) return;
-    syncAlerts(c.trip.id, alertsFor(c.b.p, { ...S.alerts, now: Date.now(), isDay: t => isDayAt(c.b, t) })).catch(() => {});
-  };
+  hooks.afterDone = tripId => { syncTrip(tripId).catch(() => {}); };
   window.addEventListener('hashchange', route);
   let rt: number | undefined;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = window.setTimeout(() => { if (location.hash === '#calendario') viewCalendar(); }, 150); });
@@ -42,6 +41,8 @@ async function boot(): Promise<void> {
   setInterval(() => { if (['#hoy', '#calendario'].includes(location.hash) && !document.querySelector('[data-doneform], details[open]')) route(); }, 60_000);
   route();
   registerSW();
+  // Si los avisos están activos, el servidor recibe los de todos los viajes al abrir la app.
+  isSubscribed().then(v => { if (v) syncAll(); }).catch(() => {});
   // La base grande de ciudades llega en segundo plano.
   loadCities();
 }

@@ -35,11 +35,33 @@ export function setDone(tripId: string, eventId: string, rec: DoneRec | null): v
   hooks.afterDone(tripId);
 }
 
-export function curTrip(): { trip: Trip; b: Built; tzmode: string } | null {
-  const trip = S.trips.find(t => t.id === S.current);
-  if (!trip) return null;
-  // El plan se recalcula con lo que has marcado (hecho a qué hora / no hecho).
-  try { return { trip, b: build(trip.raw, { log: S.done[trip.id] }), tzmode: trip.raw.tzmode || 'auto' }; } catch { return null; }
+export interface TripCtx { trip: Trip; b: Built; tzmode: string; start: number; end: number }
+
+/** Plan de un viaje, recalculado con lo que has marcado (hecho a qué hora / no hecho). */
+export function tripCtx(trip: Trip): TripCtx | null {
+  try {
+    const b = build(trip.raw, { log: S.done[trip.id] });
+    const daily = b.p.events.filter(e => e.j >= 0);
+    const all = daily.length ? daily : b.p.events;
+    return { trip, b, tzmode: trip.raw.tzmode || 'auto', start: Math.min(...all.map(e => e.start)), end: Math.max(...all.map(e => e.end)) };
+  } catch { return null; }
+}
+const allCtx = () => S.trips.map(tripCtx).filter((c): c is TripCtx => !!c);
+
+/** Viaje cuyo plan está en marcha ahora mismo (si hay varios, el que empezó antes). */
+export function activeTrip(now = Date.now()): TripCtx | null {
+  return allCtx().filter(c => c.start <= now && now < c.end).sort((a, b) => a.start - b.start)[0] ?? null;
+}
+/** Próximo viaje cuyo plan aún no ha empezado. */
+export function nextTrip(now = Date.now()): TripCtx | null {
+  return allCtx().filter(c => c.start > now).sort((a, b) => a.start - b.start)[0] ?? null;
+}
+
+/** Viaje que se ve en Calendario y Lista: el elegido en Viajes; si no, el activo, el siguiente o el último creado. */
+export function curTrip(): TripCtx | null {
+  const chosen = S.trips.find(t => t.id === S.current);
+  const c = (chosen && tripCtx(chosen)) || activeTrip() || nextTrip() || (S.trips[0] ? tripCtx(S.trips[0]) : null);
+  return c;
 }
 
 export function go(name: string): void {

@@ -281,3 +281,8 @@ details.adv .fields{margin-top:16px}
 .routine>p{color:var(--muted);margin:0 0 14px;font-size:15px}
 .routine .daycard{border-color:var(--orange)}
 .seclink{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+/* Estados vacíos (Hoy sin plan en marcha, Calendario/Lista sin viajes) */
+.now.idle{display:flex;flex-direction:column;align-items:center;padding-top:96px}
+.now.idle .hero{margin:28px 0 12px}
+.now.idle .lead{max-width:34ch}
+.trip h2 .tg{display:inline-block;vertical-align:middle;font:700 11px var(--body);color:var(--ok);background:var(--stop-bg);border-radius:999px;padding:2px 9px;margin-left:6px}
