@@ -30,7 +30,13 @@ async function handle(req: Request): Promise<Response> {
   }
   const every = Number(process.env.TICK_EVERY_MIN) || undefined; // por defecto, 10 minutos
   const result = await tick(store, webPushSender(), Date.now(), every);
-  await store.setMeta('lastTick', { at: Date.now(), via: auth.via, ...result }).catch(() => {});
+  const entry = { at: Date.now(), via: auth.via, ...result };
+  await store.setMeta('lastTick', entry).catch(() => {});
+  // Historial de las últimas pasadas con algo que hacer (las vacías no aportan).
+  if (result.items.length) {
+    const hist = ((await store.getMeta('history').catch(() => null)) as unknown[] | null) ?? [];
+    await store.setMeta('history', [entry, ...hist].slice(0, 30)).catch(() => {});
+  }
   return json(result);
 }
 export const GET = handle;

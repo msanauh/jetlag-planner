@@ -94,3 +94,12 @@ describe('estado', () => {
     expect(await st.getMeta('lastTick')).toEqual({ at: 1 });
   });
 });
+
+describe('historial de una pasada', () => {
+  it('apunta qué se envió y qué se descartó, con su hora prevista', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 't1', alerts }, NOW);
+    const r = await tick(st, async () => {}, NOW + 58 * M);
+    expect(r.items.map(i => [i.title, i.result])).toEqual([['Un poco tarde', 'stale'], ['Ya casi', 'stale'], ['Luego', 'sent']]);
+  });
+});

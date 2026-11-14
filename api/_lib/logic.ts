@@ -73,22 +73,26 @@ export async function unsubscribe(store: Store, body: unknown): Promise<void> {
 }
 
 /** Envía los avisos que tocan. Devuelve un resumen para los registros. */
-export async function tick(store: Store, send: Sender, now = Date.now(), everyMin = DEFAULT_EVERY_MIN): Promise<{ sent: number; stale: number; gone: number; failed: number }> {
+/** Qué pasó con cada aviso en una pasada (para el historial de /api/status; sin datos personales). */
+export interface TickItem { title: string; at: number; result: 'sent' | 'stale' | 'gone' | 'failed' }
+
+export async function tick(store: Store, send: Sender, now = Date.now(), everyMin = DEFAULT_EVERY_MIN): Promise<{ sent: number; stale: number; gone: number; failed: number; items: TickItem[] }> {
   const list = await store.due(now + earlyMs(everyMin), 300);
-  const r = { sent: 0, stale: 0, gone: 0, failed: 0 };
+  const r = { sent: 0, stale: 0, gone: 0, failed: 0, items: [] as TickItem[] };
+  const note = (d: Due, result: TickItem['result']) => { if (r.items.length < 20) r.items.push({ title: d.ti, at: d.at, result }); };
   const done: Due[] = [];
   const gone = new Set<string>();
   for (const d of list) {
-    if (gone.has(d.s)) { done.push(d); continue; }
-    if (d.at < now - STALE_MS) { r.stale++; done.push(d); continue; }
+    if (gone.has(d.s)) { done.push(d); note(d, 'gone'); continue; }
+    if (d.at < now - STALE_MS) { r.stale++; done.push(d); note(d, 'stale'); continue; }
     const sub = await store.getSub(d.s);
-    if (!sub) { r.gone++; done.push(d); continue; }
+    if (!sub) { r.gone++; done.push(d); note(d, 'gone'); continue; }
     try {
       await send(sub, { id: d.i, title: d.ti, body: d.b });
-      r.sent++; done.push(d);
+      r.sent++; done.push(d); note(d, 'sent');
     } catch (e) {
-      if (e instanceof PushError && (e.status === 404 || e.status === 410)) { gone.add(d.s); r.gone++; done.push(d); }
-      else r.failed++; // se reintenta en la próxima pasada (hasta que caduque)
+      if (e instanceof PushError && (e.status === 404 || e.status === 410)) { gone.add(d.s); r.gone++; done.push(d); note(d, 'gone'); }
+      else { r.failed++; note(d, 'failed'); } // se reintenta en la próxima pasada (hasta que caduque)
     }
   }
   await store.remove(done);
