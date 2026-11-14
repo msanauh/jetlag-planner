@@ -3,17 +3,17 @@ import type { SunTimes } from '../../core/sun';
 import { H, localToUtc, ymdInTz } from '../../core/time';
 import { cap, DL, DN, DS, esc, fmtH, T, WD } from '../format';
 import { icon, PILL } from '../icons';
-import { CAT, cityAt, describe, statusClass, statusOf, sunAt, titleOf, tzFor, type Built, type CitySnap } from '../model';
-import { app, curTrip, persist, S } from '../state';
+import { CAT, cityAt, daysBetween, describe, statusClass, statusOf, sunAt, titleOf, tzFor, type Built, type CitySnap } from '../model';
+import { app, curTrip, nextTrip, persist, S, type TripCtx } from '../state';
 import { tabs, onTab } from './tabs';
 import { doneControls, doneUi, handleDone, handleDoneSubmit } from './done';
 
 const HOUR = 44;
 export const cal = {
-  view: 1, idx: null as number | null, sel: null as number | null, scroll: null as number | null, panel: false, kbd: false,
+  view: 1, auto: true, idx: null as number | null, sel: null as number | null, scroll: null as number | null, panel: false, kbd: false,
   filters: { sleep: 1, meal: 1, light: 1, caffeine: 1, sugar: 1, melatonin: 1 } as Record<string, number>,
 };
-export function calReset(): void { cal.idx = null; cal.sel = null; cal.scroll = null; doneUi.editing = null; }
+export function calReset(): void { cal.idx = null; cal.auto = true; cal.sel = null; cal.scroll = null; doneUi.editing = null; }
 
 export interface Col {
   tz: string; mid: number; nxt: number; s: number; e: number; loc: CitySnap; sun: SunTimes | null;
@@ -84,17 +84,36 @@ function geom(e: PlanEvent, c: Col): [number, number] {
   return [s, Math.max(en, s + 0.45)];
 }
 
+/** "Hoy" cuando hoy no forma parte del plan: rutina habitual y cuándo empieza (o que terminó). */
+function idleHTML(cc: TripCtx, now: number): string {
+  let next: string;
+  if (now < cc.start) {
+    const n = daysBetween(cc.b.origin.tz, now, cc.start);
+    next = n <= 7 ? `Tu siguiente plan de viaje empieza ${n <= 0 ? 'hoy' : n === 1 ? 'mañana' : `en ${n} días`}.` : 'No tienes viajes pronto.';
+  } else {
+    const nx = nextTrip(now);
+    const n = nx ? daysBetween(nx.b.origin.tz, now, nx.start) : Infinity;
+    next = 'Este plan ya ha terminado. ' + (n <= 7 ? `Tu siguiente plan de viaje empieza ${n === 1 ? 'mañana' : `en ${n} días`}.` : 'No tienes viajes pronto.');
+  }
+  return `<div class="scroll"><div class="wrap now idle"><span class="dot big p-sleep">${icon('moon')}</span>
+    <h1 class="hero">Sigue con tu rutina habitual</h1>
+    <p class="lead c">Asegúrate de mantener una rutina de sueño limpia y consistente. ${esc(next)}</p>
+    <button class="btn ghost" data-act="firstday" style="margin-top:28px">${now < cc.start ? 'Ver el primer día del plan' : 'Ver el plan'}</button></div></div>`;
+}
+
 export function viewCalendar(): void {
   const cc = curTrip(); if (!cc) { location.hash = 'viajes'; return; }
   const { trip, b, tzmode } = cc, { p } = b;
   const done = S.done[trip.id];
   const now = Date.now();
   const cols = buildColumns(b, tzmode);
-  // En pantallas estrechas (móvil) la vista de 5 días no cabe: se queda en 3.
-  // Siempre un día: la progresión de varios días está en Lista.
-  cal.view = 1;
+  // Vistas: "Hoy" (un día, abre en el de hoy) o "3 días".
+  if (cal.view !== 3) cal.view = 1;
   const N = cal.view;
-  if (cal.idx == null) { const i = cols.findIndex(c => now >= c.s && now < c.e); cal.idx = i >= 0 ? Math.max(0, i - (N > 1 ? 1 : 0)) : 0; }
+  const todayIdx = cols.findIndex(c => now >= c.s && now < c.e);
+  if (cal.idx == null) { cal.auto = true; cal.idx = todayIdx >= 0 ? Math.max(0, todayIdx - (N > 1 ? 1 : 0)) : 0; }
+  // En "Hoy", si hoy no forma parte del plan: estado vacío en lugar de un día sin nada.
+  const idle = N === 1 && cal.auto && todayIdx < 0;
   cal.idx = Math.max(0, Math.min(cal.idx, Math.max(0, cols.length - N)));
   const vis = cols.slice(cal.idx, cal.idx + N);
   const old = app().querySelector('.cal-scroll');
@@ -187,14 +206,19 @@ export function viewCalendar(): void {
   b.legTo.forEach(c => { if (!seen.has(c.tz)) { seen.add(c.tz); tzOpts.push(['tz:' + c.tz, 'Hora de ' + c.n]); } });
   const tzSel = `<select id="tzmode" aria-label="Zona horaria de las horas">${tzOpts.map(o => `<option value="${esc(o[0])}"${tzmode === o[0] ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
 
-  app().innerHTML = `<div class="cal"><div class="bar"><div class="r1"><div class="ttl"><b>${esc(b.title)}</b></div></div>
-    <div class="r2"><button class="ib" data-act="prev" aria-label="Anterior"${cal.idx === 0 ? ' disabled' : ''}>‹</button><div class="range" aria-live="polite">${esc(rangeTxt)}</div><button class="ib" data-act="next" aria-label="Siguiente"${cal.idx + N >= cols.length ? ' disabled' : ''}>›</button><button class="ib sm" data-act="today">Hoy</button><button class="ib sm" data-act="flight">Vuelo</button><button class="ib sm" data-act="panel" aria-expanded="${cal.panel}">Filtros</button></div></div>
+  const seg = `<div class="seg" role="group" aria-label="Vista">${([[1, 'Hoy'], [3, '3 días']] as [number, string][]).map(v => `<button data-view="${v[0]}" aria-pressed="${N === v[0]}">${v[1]}</button>`).join('')}</div>`;
+  const body = idle ? idleHTML(cc, now)
+    : `<div class="cal-scroll"><div class="cal-head"><div class="gap" style="width:${axisW}px"></div>${heads}</div><div class="cal-body">${axis}${colsHTML}</div></div>`;
+  app().innerHTML = `<div class="cal"><div class="bar"><div class="r1"><div class="ttl"><b>${esc(b.title)}</b></div>${seg}</div>
+    <div class="r2"><button class="ib" data-act="prev" aria-label="Anterior"${cal.idx === 0 || idle ? ' disabled' : ''}>‹</button><div class="range" aria-live="polite">${esc(idle ? 'Hoy' : rangeTxt)}</div><button class="ib" data-act="next" aria-label="Siguiente"${cal.idx + N >= cols.length && !idle ? ' disabled' : ''}>›</button><button class="ib sm" data-act="flight">Vuelo</button><button class="ib sm" data-act="panel" aria-expanded="${cal.panel}">Filtros</button></div></div>
     ${cal.panel ? `<div class="panel">${filt}${tzSel}</div>` : ''}
-    <div class="cal-scroll"><div class="cal-head"><div class="gap" style="width:${axisW}px"></div>${heads}</div><div class="cal-body">${axis}${colsHTML}</div></div>${sheet}${tabs('calendario')}</div>`;
+    ${body}${sheet}${tabs('calendario')}</div>`;
 
-  const sc = app().querySelector<HTMLElement>('.cal-scroll')!;
-  sc.scrollTop = prevScroll != null ? prevScroll : 6 * HOUR - 16;
-  sc.addEventListener('scroll', () => { cal.scroll = sc.scrollTop; }, { passive: true });
+  const sc = app().querySelector<HTMLElement>('.cal-scroll');
+  if (sc) {
+    sc.scrollTop = prevScroll != null ? prevScroll : 6 * HOUR - 16;
+    sc.addEventListener('scroll', () => { cal.scroll = sc.scrollTop; }, { passive: true });
+  }
   if (cal.kbd) {
     cal.kbd = false;
     const target = cal.sel != null ? app().querySelector<HTMLElement>('.sheet [data-done], .sheet .ib') : null;
@@ -210,11 +234,15 @@ export function viewCalendar(): void {
     const pill = t.closest<HTMLElement>('[data-k]');
     if (pill) { const k = +pill.dataset.k!; cal.sel = k === cal.sel ? null : k; doneUi.editing = null; cal.kbd = (e as MouseEvent).detail === 0; return viewCalendar(); }
     const btn = t.closest<HTMLButtonElement>('button'); if (!btn) return;
+    // Hoy | 3 días: ambas abren en el día de hoy.
+    if (btn.dataset.view) { cal.view = +btn.dataset.view; cal.idx = null; cal.sel = null; return viewCalendar(); }
+    if (btn.dataset.act === 'firstday') { cal.auto = false; cal.idx = 0; cal.sel = null; return viewCalendar(); }
     if (btn.dataset.filter) { const f = btn.dataset.filter; cal.filters[f] = cal.filters[f] ? 0 : 1; cal.sel = null; return viewCalendar(); }
     const a = btn.dataset.act, idx = cal.idx!;
+    if (a === 'prev' || a === 'next' || a === 'flight') cal.auto = false;
+    if (a === 'next' && idle) { cal.idx = 0; cal.sel = null; return viewCalendar(); }
     if (a === 'prev') { cal.idx = Math.max(0, idx - N); cal.sel = null; viewCalendar(); }
     else if (a === 'next') { cal.idx = Math.min(Math.max(0, cols.length - N), idx + N); cal.sel = null; viewCalendar(); }
-    else if (a === 'today') { cal.idx = null; cal.sel = null; viewCalendar(); }
     else if (a === 'flight') {
       // Va al siguiente vuelo tras la vista actual (y vuelve al primero al final).
       const flightCols = p.legs.map(l => cols.findIndex(c => l.dep >= c.s && l.dep < c.e)).filter(i => i >= 0);

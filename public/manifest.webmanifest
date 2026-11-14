@@ -3,7 +3,7 @@
   "short_name": "Jet Lag",
   "description": "Plan de jet lag día a día: sueño, luz, comidas, cafeína y azúcar.",
   "lang": "es",
-  "start_url": "./#hoy",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#FFF3EB",

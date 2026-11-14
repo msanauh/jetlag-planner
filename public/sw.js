@@ -25,7 +25,7 @@ self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { title: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'Jet Lag Planner', {
-    body: d.body || '', tag: d.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#hoy' },
+    body: d.body || '', tag: d.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './#calendario' },
   }));
 });
 self.addEventListener('notificationclick', e => {
