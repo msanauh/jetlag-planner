@@ -18,6 +18,8 @@ export interface Store {
   remove(items: Due[]): Promise<void>;
   /** Borra la suscripción y todos sus avisos. */
   forget(subId: string): Promise<void>;
+  /** Viajes con avisos guardados para una suscripción. */
+  tripsOf(subId: string): Promise<string[]>;
   /** Avisos pendientes de una suscripción: cuántos y el próximo instante. */
   pending(subId: string): Promise<{ count: number; next: number | null }>;
   /** Total de avisos pendientes (todas las suscripciones). */
@@ -48,8 +50,8 @@ export function parseSub(x: unknown): PushSub {
   return { endpoint: s.endpoint, expirationTime: s.expirationTime ?? null, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
 }
 
-export async function subscribe(store: Store, body: unknown, now = Date.now()): Promise<{ subId: string; stored: number }> {
-  const b = body as { subscription?: unknown; trip?: unknown; alerts?: unknown };
+export async function subscribe(store: Store, body: unknown, now = Date.now()): Promise<{ subId: string; stored: number; removedTrips: number }> {
+  const b = body as { subscription?: unknown; trip?: unknown; alerts?: unknown; keep?: unknown };
   const sub = parseSub(b?.subscription);
   const trip = typeof b?.trip === 'string' && /^[\w-]{1,40}$/.test(b.trip) ? b.trip : null;
   if (!trip) throw new Error('Viaje no válido.');
@@ -63,7 +65,14 @@ export async function subscribe(store: Store, body: unknown, now = Date.now()): 
   }
   await store.setSub(subId, sub);
   await store.replaceAlerts(subId, trip, alerts);
-  return { subId, stored: alerts.length };
+  // `keep`: todos los viajes que existen ahora en el móvil. Los avisos de cualquier otro
+  // (borrados, versiones antiguas) se eliminan para que no lleguen a destiempo.
+  let removedTrips = 0;
+  if (Array.isArray(b.keep) && b.keep.every(x => typeof x === 'string')) {
+    const keep = new Set<string>([...(b.keep as string[]), trip]);
+    for (const t of await store.tripsOf(subId)) if (!keep.has(t)) { await store.replaceAlerts(subId, t, []); removedTrips++; }
+  }
+  return { subId, stored: alerts.length, removedTrips };
 }
 
 export async function unsubscribe(store: Store, body: unknown): Promise<void> {
@@ -82,7 +91,12 @@ export async function tick(store: Store, send: Sender, now = Date.now(), everyMi
   const note = (d: Due, result: TickItem['result']) => { if (r.items.length < 20) r.items.push({ title: d.ti, at: d.at, result }); };
   const done: Due[] = [];
   const gone = new Set<string>();
+  const seen = new Set<string>();
   for (const d of list) {
+    // Dos copias del mismo aviso para el mismo móvil: se envía una sola vez.
+    const key = `${d.s}|${d.i}`;
+    if (seen.has(key)) { done.push(d); continue; }
+    seen.add(key);
     if (gone.has(d.s)) { done.push(d); note(d, 'gone'); continue; }
     if (d.at < now - STALE_MS) { r.stale++; done.push(d); note(d, 'stale'); continue; }
     const sub = await store.getSub(d.s);

@@ -103,3 +103,31 @@ describe('historial de una pasada', () => {
     expect(r.items.map(i => [i.title, i.result])).toEqual([['Un poco tarde', 'stale'], ['Ya casi', 'stale'], ['Luego', 'sent']]);
   });
 });
+
+describe('limpieza de avisos de viajes que ya no existen', () => {
+  it('con keep, borra los avisos de otros viajes de la misma suscripción', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 'viejo', alerts: alerts.slice(3) }, NOW);
+    await subscribe(st, { subscription: sub, trip: 'actual', alerts: alerts.slice(2, 3) }, NOW);
+    expect(st.all()).toHaveLength(2);
+    const r = await subscribe(st, { subscription: sub, trip: 'actual', alerts: alerts.slice(2, 3), keep: ['actual'] }, NOW);
+    expect(r.removedTrips).toBe(1);
+    expect(st.all().map(d => d.t)).toEqual(['actual']);
+  });
+  it('no toca los avisos de otros móviles', async () => {
+    const st = memoryStore();
+    const otro = { ...sub, endpoint: 'https://web.push.apple.com/otro' };
+    await subscribe(st, { subscription: otro, trip: 'suyo', alerts: alerts.slice(3) }, NOW);
+    await subscribe(st, { subscription: sub, trip: 'actual', alerts: alerts.slice(3), keep: ['actual'] }, NOW);
+    expect(st.all().map(d => d.t).sort()).toEqual(['actual', 'suyo']);
+  });
+  it('dos copias del mismo aviso se envían una sola vez', async () => {
+    const st = memoryStore();
+    await subscribe(st, { subscription: sub, trip: 'a', alerts: alerts.slice(2, 3) }, NOW);
+    await subscribe(st, { subscription: sub, trip: 'b', alerts: alerts.slice(2, 3) }, NOW);
+    const sent: string[] = [];
+    await tick(st, async (_s, p) => { sent.push(p.id); }, NOW);
+    expect(sent).toEqual(['a3']);
+    expect(st.all()).toHaveLength(0);
+  });
+});

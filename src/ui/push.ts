@@ -34,17 +34,25 @@ export async function enablePush(items: { tripId: string; alerts: Alert[] }[]): 
   if (perm !== 'granted') return 'Sin permiso no puedo enviarte avisos. Puedes activarlo en Ajustes → Notificaciones.';
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID!) }));
-  try { for (const it of items) await syncAlerts(it.tripId, it.alerts, sub); }
+  const keep = items.map(it => it.tripId);
+  try { for (const it of items) await syncAlerts(it.tripId, it.alerts, sub, keep); }
   catch (e) { return `Permiso concedido, pero el servidor no pudo guardar los avisos: ${(e as Error).message}`; }
   return 'Avisos activados.';
 }
 
 /** Reenvía la lista de avisos (al cambiar el plan o las preferencias). Solo lo mínimo. */
-export async function syncAlerts(tripId: string, alerts: Alert[], sub?: PushSubscription | null): Promise<void> {
+export async function syncAlerts(tripId: string, alerts: Alert[], sub?: PushSubscription | null, keep?: string[]): Promise<void> {
+  // En fila: dos envíos a la vez (abrir la app mientras marcas algo) podrían mezclarse.
+  const run = queue.then(() => doSync(tripId, alerts, sub, keep));
+  queue = run.catch(() => {});
+  return run;
+}
+let queue: Promise<void> = Promise.resolve();
+async function doSync(tripId: string, alerts: Alert[], sub?: PushSubscription | null, keep?: string[]): Promise<void> {
   if (!pushConfigured() || !pushSupported() || permission() !== 'granted') return;
   sub ??= await (await navigator.serviceWorker.ready).pushManager.getSubscription();
   if (!sub) return;
-  const r = await post('/subscribe', { subscription: sub.toJSON(), trip: tripId, alerts: alerts.map(a => ({ id: a.id, at: a.at, title: a.title, body: a.body })) });
+  const r = await post('/subscribe', { subscription: sub.toJSON(), trip: tripId, alerts: alerts.map(a => ({ id: a.id, at: a.at, title: a.title, body: a.body })), ...(keep ? { keep } : {}) });
   if (!r.ok) throw new Error(await r.json().then((j: { error?: string }) => j.error ?? '').catch(() => '') || `Error ${r.status}`);
 }
 

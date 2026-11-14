@@ -17,6 +17,11 @@ export async function syncTrip(tripId: string): Promise<void> {
   const c = trip && tripCtx(trip);
   await syncAlerts(tripId, c ? tripAlerts(c) : []);
 }
+/** Envía los avisos de todos los viajes y le dice al servidor que borre los de cualquier otro. */
 export async function syncAll(): Promise<void> {
-  for (const it of allTripAlerts()) await syncAlerts(it.tripId, it.alerts).catch(() => {});
+  const keep = S.trips.map(t => t.id);
+  const items = allTripAlerts();
+  // Aunque no quede ningún viaje con avisos, una llamada vacía sirve para limpiar restos.
+  if (!items.length && keep.length) items.push({ tripId: keep[0], alerts: [], ctx: null as never });
+  for (const it of items) await syncAlerts(it.tripId, it.alerts, undefined, keep).catch(() => {});
 }
