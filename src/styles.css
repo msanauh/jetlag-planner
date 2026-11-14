@@ -148,7 +148,7 @@ details.adv .fields{margin-top:16px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
 .seg button{border:0;background:transparent;color:var(--muted);min-height:42px;padding:0 12px;font:600 14px var(--body);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
-.range{flex:1;text-align:center;font:700 15px var(--display)}
+.range{flex:1;text-align:center;font:700 15px var(--display);white-space:nowrap}
 .panel{background:var(--surface);border-bottom:1px solid var(--line);padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .panel select{font:500 15px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;min-height:40px;padding:0 10px}
 .fchip{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;min-height:40px;padding:0 14px;font:600 14px var(--body);cursor:pointer}
@@ -286,3 +286,6 @@ details.adv .fields{margin-top:16px}
 .now.idle .hero{margin:28px 0 12px}
 .now.idle .lead{max-width:34ch}
 .trip h2 .tg{display:inline-block;vertical-align:middle;font:700 11px var(--body);color:var(--ok);background:var(--stop-bg);border-radius:999px;padding:2px 9px;margin-left:6px}
+.hc.one{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 4px}
+.hc.one .ct{font-size:13px;font-weight:600;color:var(--ink)}
+.hc.one .tg{margin-top:0}

@@ -91,8 +91,8 @@ export function viewCalendar(): void {
   const now = Date.now();
   const cols = buildColumns(b, tzmode);
   // En pantallas estrechas (móvil) la vista de 5 días no cabe: se queda en 3.
-  const wide = (app().clientWidth || innerWidth) >= 700;
-  if (!wide && cal.view === 5) cal.view = 3;
+  // Siempre un día: la progresión de varios días está en Lista.
+  cal.view = 1;
   const N = cal.view;
   if (cal.idx == null) { const i = cols.findIndex(c => now >= c.s && now < c.e); cal.idx = i >= 0 ? Math.max(0, i - (N > 1 ? 1 : 0)) : 0; }
   cal.idx = Math.max(0, Math.min(cal.idx, Math.max(0, cols.length - N)));
@@ -108,6 +108,8 @@ export function viewCalendar(): void {
     const dep = p.legs.some(l => l.dep >= c.s && l.dep < c.e), arr = p.legs.some(l => l.arr >= c.s && l.arr < c.e);
     const tag = dep ? '<span class="tg">Salida</span>' : arr ? '<span class="tg">Llegada</span>' : '';
     const mdt = c.mid + 12 * H;
+    // Con un solo día la fecha ya está en la barra: aquí solo la ciudad (y Salida/Llegada).
+    if (N === 1) return `<div class="hc one"><div class="ct">${esc(c.loc.n)}</div>${tag}</div>`;
     return `<div class="hc"><div class="wd">${esc(WD(c.tz).format(mdt).replace('.', ''))}</div><div class="dn">${esc(DN(c.tz).format(mdt))}</div><div class="ct">${esc(c.loc.n)}</div>${tag}</div>`;
   }).join('');
 
@@ -185,7 +187,7 @@ export function viewCalendar(): void {
   b.legTo.forEach(c => { if (!seen.has(c.tz)) { seen.add(c.tz); tzOpts.push(['tz:' + c.tz, 'Hora de ' + c.n]); } });
   const tzSel = `<select id="tzmode" aria-label="Zona horaria de las horas">${tzOpts.map(o => `<option value="${esc(o[0])}"${tzmode === o[0] ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
 
-  app().innerHTML = `<div class="cal"><div class="bar"><div class="r1"><div class="ttl"><b>${esc(b.title)}</b></div><div class="seg" role="group" aria-label="Vista">${([[1, 'Día'], [3, '3 días'], [5, '5 días']] as [number, string][]).filter(v => wide || v[0] !== 5).map(v => `<button data-view="${v[0]}" aria-pressed="${cal.view === v[0]}">${v[1]}</button>`).join('')}</div></div>
+  app().innerHTML = `<div class="cal"><div class="bar"><div class="r1"><div class="ttl"><b>${esc(b.title)}</b></div></div>
     <div class="r2"><button class="ib" data-act="prev" aria-label="Anterior"${cal.idx === 0 ? ' disabled' : ''}>‹</button><div class="range" aria-live="polite">${esc(rangeTxt)}</div><button class="ib" data-act="next" aria-label="Siguiente"${cal.idx + N >= cols.length ? ' disabled' : ''}>›</button><button class="ib sm" data-act="today">Hoy</button><button class="ib sm" data-act="flight">Vuelo</button><button class="ib sm" data-act="panel" aria-expanded="${cal.panel}">Filtros</button></div></div>
     ${cal.panel ? `<div class="panel">${filt}${tzSel}</div>` : ''}
     <div class="cal-scroll"><div class="cal-head"><div class="gap" style="width:${axisW}px"></div>${heads}</div><div class="cal-body">${axis}${colsHTML}</div></div>${sheet}${tabs('calendario')}</div>`;
@@ -208,7 +210,6 @@ export function viewCalendar(): void {
     const pill = t.closest<HTMLElement>('[data-k]');
     if (pill) { const k = +pill.dataset.k!; cal.sel = k === cal.sel ? null : k; doneUi.editing = null; cal.kbd = (e as MouseEvent).detail === 0; return viewCalendar(); }
     const btn = t.closest<HTMLButtonElement>('button'); if (!btn) return;
-    if (btn.dataset.view) { cal.view = +btn.dataset.view; cal.sel = null; return viewCalendar(); }
     if (btn.dataset.filter) { const f = btn.dataset.filter; cal.filters[f] = cal.filters[f] ? 0 : 1; cal.sel = null; return viewCalendar(); }
     const a = btn.dataset.act, idx = cal.idx!;
     if (a === 'prev') { cal.idx = Math.max(0, idx - N); cal.sel = null; viewCalendar(); }
